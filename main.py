@@ -64,6 +64,8 @@ class MobitecRS485(serial.rs485.RS485):
             delay_before_tx=0.2,
         )
 
+        self.start_time = time.monotonic()
+
     def write_packet(self, addr: int, b: bytes):
         # TODO: may need to calculate checksum after escaping, unclear
         data = bytes([addr, *b])
@@ -79,7 +81,8 @@ class MobitecRS485(serial.rs485.RS485):
                 payload_escaped.append(byte)
 
         packet = bytes([0xFF, *payload_escaped, 0xFF])
-        print(f"write to {addr=:02x}: {better_hex(b)} (packet: {better_hex(packet)})")
+        t = time.monotonic() - self.start_time
+        print(f"@{t} write to {addr=:02x}: {better_hex(b)} (packet: {better_hex(packet)})")
         self.write(packet)
 
 
@@ -175,6 +178,7 @@ class SevenSegment(MobitecRS485):
         )
 
     def write_str(self, addr: int, s: str):
+        print(f"write_str {s!r}")
         if len(s) > 3:
             raise ValueError("string {s!r} must have length 3 or less")
 
