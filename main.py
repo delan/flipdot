@@ -29,7 +29,7 @@ def main():
         sys.exit(1)
 
     with SevenSegment(args.port) as ser:
-        time.sleep(5)
+        time.sleep(0)
         applet(addr, ser)
 
 
@@ -38,12 +38,7 @@ def hello(addr: int, ser: "SevenSegment"):
     s = "   hello world   "
     for i in range(len(s) - 2):
         ser.write_str(addr, s[i : i + 3])
-        time.sleep(2)
-        ser.write_str(addr, s[i : i + 3])
-        time.sleep(0.1)
-        ser.write_str(addr, s[i : i + 3])
-        time.sleep(0.1)
-        time.sleep(0.5)
+        time.sleep(1.5)
 
 
 @applet
@@ -53,7 +48,7 @@ def cycle_agd(addr: int, ser: "SevenSegment"):
     r = SevenSegment.D
     while True:
         ser.write_segments(addr, l, m, r)
-        time.sleep(5)
+        time.sleep(1.5)
         l, m, r = m, r, l
 
 
@@ -61,7 +56,7 @@ def cycle_agd(addr: int, ser: "SevenSegment"):
 def counter(addr: int, ser: "SevenSegment"):
     for i in range(1000):
         ser.write_str(addr, str(i))
-        time.sleep(5)
+        time.sleep(1.5)
 
 
 class MobitecRS485(serial.rs485.RS485):
@@ -79,8 +74,8 @@ class MobitecRS485(serial.rs485.RS485):
         self.rs485_mode = serial.rs485.RS485Settings(
             rts_level_for_rx=True,
             rts_level_for_tx=False,
-            delay_before_rx=0.2,
-            delay_before_tx=0.2,
+            delay_before_rx=0.25,
+            delay_before_tx=0.25,
         )
 
         self.start_time = time.monotonic()
@@ -99,7 +94,9 @@ class MobitecRS485(serial.rs485.RS485):
             else:
                 payload_escaped.append(byte)
 
-        packet = bytes([0xFF, *payload_escaped, 0xFF])
+        # wrapping the data in empty messages on either side, then doubling that
+        # in our tx, seems to trigger display updates much more reliably.
+        packet = bytes([0xFF, addr, addr, 0xFF, 0xFF, *payload_escaped, 0xFF, 0xFF, addr, addr, 0xFF] * 2)
         t = time.monotonic() - self.start_time
         print(f"@{t} write to {addr=:02x}: {better_hex(b)} (packet: {better_hex(packet)})")
         self.write(packet)
