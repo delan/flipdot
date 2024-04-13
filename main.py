@@ -9,7 +9,7 @@ from typing import Callable, TypeAlias
 import serial.rs485
 
 
-Applet: TypeAlias = Callable[[int, "SevenSegment"], NoneType]
+Applet: TypeAlias = Callable[[int, "SevenSegment", list[str]], NoneType]
 applets: dict[str, Applet] = {}
 def applet(fun: Applet):
     applets[fun.__name__] = fun
@@ -19,22 +19,27 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("port")
     parser.add_argument("addr")
-    parser.add_argument("applet", nargs="?")
+    parser.add_argument("applet", nargs="*")
     args = parser.parse_args()
 
     addr = int(args.addr, base=0)
-    applet = applets.get(args.applet)
+    applet_name = ""
+    applet_args: list[str] = []
+    if len(args.applet) > 0:
+        applet_name = args.applet[0]
+        applet_args = args.applet[1:]
+    applet = applets.get(applet_name)
     if applet is None:
         print(f"available applets: {applets.keys()}")
         sys.exit(1)
 
     with SevenSegment(args.port) as ser:
         time.sleep(0)
-        applet(addr, ser)
+        applet(addr, ser, applet_args)
 
 
 @applet
-def hello(addr: int, ser: "SevenSegment"):
+def hello(addr: int, ser: "SevenSegment", args: list[str]):
     s = "   hello world   "
     for i in range(len(s) - 2):
         ser.write_str(addr, s[i : i + 3])
@@ -42,7 +47,7 @@ def hello(addr: int, ser: "SevenSegment"):
 
 
 @applet
-def cycle_agd(addr: int, ser: "SevenSegment"):
+def cycle_agd(addr: int, ser: "SevenSegment", args: list[str]):
     l = SevenSegment.A
     m = SevenSegment.G
     r = SevenSegment.D
@@ -53,9 +58,48 @@ def cycle_agd(addr: int, ser: "SevenSegment"):
 
 
 @applet
-def counter(addr: int, ser: "SevenSegment"):
+def counter(addr: int, ser: "SevenSegment", args: list[str]):
     for i in range(1000):
         ser.write_str(addr, str(i))
+        time.sleep(1.5)
+
+
+@applet
+def twirl(addr: int, ser: "SevenSegment", args: list[str]):
+    for _ in range(1000):
+        for glyph in [
+            SevenSegment.A, SevenSegment.B, SevenSegment.G,
+            SevenSegment.E, SevenSegment.D, SevenSegment.C,
+            SevenSegment.G, SevenSegment.F,
+        ]:
+            ser.write_segments(addr, glyph, glyph, glyph)
+            time.sleep(1.5)
+
+
+@applet
+def spin(addr: int, ser: "SevenSegment", args: list[str]):
+    for _ in range(1000):
+        for states in [
+            [SevenSegment.A, 0, 0],
+            [0, SevenSegment.A, 0],
+            [0, 0, SevenSegment.A],
+            [0, 0, SevenSegment.B],
+            [0, 0, SevenSegment.C],
+            [0, 0, SevenSegment.D],
+            [0, SevenSegment.D, 0],
+            [SevenSegment.D, 0, 0],
+            [SevenSegment.E, 0, 0],
+            [SevenSegment.F, 0, 0],
+        ]:
+            ser.write_segments(addr, *states)
+            time.sleep(1.5)
+
+
+@applet
+def marquee(addr: int, ser: "SevenSegment", args: list[str]):
+    s = "   " + args[0] + "   "
+    for i in range(len(s) - 2):
+        ser.write_str(addr, s[i : i + 3])
         time.sleep(1.5)
 
 
