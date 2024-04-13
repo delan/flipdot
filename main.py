@@ -1,48 +1,67 @@
 #!/usr/bin/env python3
 # pyright: strict
 import argparse
+import sys
 import time
+from types import NoneType
+from typing import Callable, TypeAlias
 
 import serial.rs485
+
+
+Applet: TypeAlias = Callable[[int, "SevenSegment"], NoneType]
+applets: dict[str, Applet] = {}
+def applet(fun: Applet):
+    applets[fun.__name__] = fun
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("port")
     parser.add_argument("addr")
+    parser.add_argument("applet", nargs="?")
     args = parser.parse_args()
 
     addr = int(args.addr, base=0)
+    applet = applets.get(args.applet)
+    if applet is None:
+        print(f"available applets: {applets.keys()}")
+        sys.exit(1)
 
     with SevenSegment(args.port) as ser:
+        time.sleep(5)
+        applet(addr, ser)
+
+
+@applet
+def hello(addr: int, ser: "SevenSegment"):
+    s = "   hello world   "
+    for i in range(len(s) - 2):
+        ser.write_str(addr, s[i : i + 3])
         time.sleep(2)
-        s = "   hello world   "
-        for i in range(len(s) - 2):
-            ser.write_str(addr, s[i : i + 3])
-            time.sleep(0.1)
-            ser.write_str(addr, s[i : i + 3])
-            time.sleep(0.1)
-            ser.write_str(addr, s[i : i + 3])
-            time.sleep(0.1)
+        ser.write_str(addr, s[i : i + 3])
+        time.sleep(0.1)
+        ser.write_str(addr, s[i : i + 3])
+        time.sleep(0.1)
+        time.sleep(0.5)
 
-            # time.sleep(0.5)
 
-        # ser.write_digits(addr, 0x0, 0x6, 0x9)
+@applet
+def cycle_agd(addr: int, ser: "SevenSegment"):
+    l = SevenSegment.A
+    m = SevenSegment.G
+    r = SevenSegment.D
+    while True:
+        ser.write_segments(addr, l, m, r)
+        time.sleep(5)
+        l, m, r = m, r, l
 
-        # for i in range(4):
-        #     for j in range(8):
-        #         b0 = (1 << j) if i == 0 else 0
-        #         b1 = (1 << j) if i == 1 else 0
-        #         b2 = (1 << j) if i == 2 else 0
-        #         b3 = (1 << j) if i == 3 else 0
-        #         print(f"byte {i}, bit {j} (1 << {j})")
-        #         ser.write_packet(addr, bytes([0xAE, b0, b1, b2, b3]))
-        #         time.sleep(0.1)
-        #         ser.write_packet(addr, bytes([0xAE, b0, b1, b2, b3]))
-        #         time.sleep(0.1)
-        #         ser.write_packet(addr, bytes([0xAE, b0, b1, b2, b3]))
 
-        #         time.sleep(2)
+@applet
+def counter(addr: int, ser: "SevenSegment"):
+    for i in range(1000):
+        ser.write_str(addr, str(i))
+        time.sleep(5)
 
 
 class MobitecRS485(serial.rs485.RS485):
